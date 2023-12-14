@@ -1,7 +1,8 @@
 #include <esp_now.h>
 #include <WiFi.h>
 
-#define VRX_PIN  26 // X-axis analog input from joystick
+// pin 26 can't be used due to Wifi Station Mode
+#define VRX_PIN  35 // X-axis analog input from joystick
 
 int valueX = 0; // to store the X-axis value
 
