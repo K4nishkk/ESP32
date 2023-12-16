@@ -1,6 +1,23 @@
 #include <esp_now.h>
 #include <WiFi.h>
 
+#include <Servo.h>
+
+#define SERVO_PIN 32 // ESP32 pin GPIO26 connected to servo motor
+
+// Motor
+int motor1Pin1 = 27; 
+int motor1Pin2 = 26; 
+int enable1Pin = 14; 
+
+// Setting PWM properties
+const int freq = 30000;
+const int pwmChannel = 0;
+const int resolution = 8;
+int dutyCycle = 200;
+
+Servo servoMotor;
+
 // Structure example to receive data
 // Must match the sender structure
 typedef struct struct_message {
@@ -23,9 +40,37 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   Serial.print(myData.direction);
   Serial.print("             Rudder: ");
   Serial.println(myData.rudderAngle);
+
+  if (myData.direction) {
+    digitalWrite(motor1Pin1, HIGH);
+    digitalWrite(motor1Pin2, LOW); 
+  }
+  else {
+    digitalWrite(motor1Pin1, LOW);
+    digitalWrite(motor1Pin2, HIGH); 
+  }
+
+  
+  ledcWrite(pwmChannel, myData.speed);
+
+  servoMotor.write(myData.rudderAngle);
+
 }
 
 void setup() {
+  // sets the pins as outputs:
+  pinMode(motor1Pin1, OUTPUT);
+  pinMode(motor1Pin2, OUTPUT);
+  pinMode(enable1Pin, OUTPUT);
+  
+  // configure LED PWM functionalitites
+  ledcSetup(pwmChannel, freq, resolution);
+  
+  // attach the channel to the GPIO to be controlled
+  ledcAttachPin(enable1Pin, pwmChannel);
+
+  servoMotor.attach(SERVO_PIN);  // attaches the servo on ESP32 pin
+
   // Initialize Serial Monitor
   Serial.begin(115200);
 
