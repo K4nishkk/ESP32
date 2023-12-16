@@ -3,18 +3,17 @@
 
 #include <Servo.h>
 
-#define SERVO_PIN 32 // ESP32 pin GPIO26 connected to servo motor
+#define SERVO_PIN 14 // ESP32 pin GPIO26 connected to servo motor
 
 // Motor
 int motor1Pin1 = 27; 
-int motor1Pin2 = 26; 
-int enable1Pin = 14; 
+int motor1Pin2 = 25; 
+int enable1Pin = 32; 
 
 // Setting PWM properties
 const int freq = 30000;
-const int pwmChannel = 0;
+const int pwmChannel = 15; // servo motor header file was using don't know how many pwm channels, so in its header file, I set max limit of pwm channels to 14.
 const int resolution = 8;
-int dutyCycle = 200;
 
 Servo servoMotor;
 
@@ -68,6 +67,8 @@ void setup() {
   
   // attach the channel to the GPIO to be controlled
   ledcAttachPin(enable1Pin, pwmChannel);
+  
+  ledcWrite(pwmChannel, 0);
 
   servoMotor.attach(SERVO_PIN);  // attaches the servo on ESP32 pin
 
