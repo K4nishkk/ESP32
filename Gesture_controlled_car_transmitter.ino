@@ -37,7 +37,8 @@ Quaternion q;         // [w, x, y, z]         quaternion container
 VectorFloat gravity;  // [x, y, z]            gravity vector
 float ypr[3];         // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
-bool connection = true;
+# define CONNECTION_LED 27
+bool connection;
 
 ezButton button(18);
 
@@ -159,7 +160,10 @@ void setup() {
     Serial.println(F(")"));
   }
 
+  connection = true;
   button.setDebounceTime(50);  // set debounce time to 50 milliseconds
+  pinMode(27, OUTPUT);
+  digitalWrite(27, HIGH);
 }
 
 
@@ -204,10 +208,14 @@ void loop() {
 
     if (button.isReleased()) {
       connection = !connection;
+      if (connection == true) digitalWrite(27, HIGH);
+      else digitalWrite(27, LOW);
     }
 
-    if (connection == true) {
-      esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&myData, sizeof(myData));
+    if (connection == false) {
+      myData.num = 0;
     }
+
+    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&myData, sizeof(myData));
   }
 }
