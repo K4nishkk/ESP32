@@ -1,5 +1,25 @@
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
+#include <esp_now.h>
+#include <WiFi.h>
+
+// REPLACE WITH YOUR RECEIVER MAC Address
+uint8_t broadcastAddress[] = {0xA0, 0xA3, 0xB3, 0x2B, 0x52, 0xF4};
+
+typedef struct struct_message {
+  int num;
+} struct_message;
+
+// Create a struct_message called myData
+struct_message myData;
+
+esp_now_peer_info_t peerInfo;
+
+// callback when data is sent
+// void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+//   Serial.print("\r\nLast Packet Send Status:\t");
+//   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+// }
 
 #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
   #include "Wire.h"
@@ -58,6 +78,30 @@ void setup() {
     Serial.begin(115200);
     while (!Serial); // wait for Leonardo enumeration, others continue immediately
 
+    // Set device as a Wi-Fi Station
+    WiFi.mode(WIFI_STA);
+
+    // Init ESP-NOW
+    if (esp_now_init() != ESP_OK) {
+      Serial.println("Error initializing ESP-NOW");
+      return;
+    }
+
+    // Once ESPNow is successfully Init, we will register for Send CB to
+    // get the status of Trasnmitted packet
+    // esp_now_register_send_cb(OnDataSent);
+    
+    // Register peer
+    memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+    peerInfo.channel = 0;  
+    peerInfo.encrypt = false;
+    
+    // Add peer        
+    if (esp_now_add_peer(&peerInfo) != ESP_OK){
+      Serial.println("Failed to add peer");
+      return;
+    }
+
     // NOTE: 8MHz or slower host processors, like the Teensy @ 3.3V or Arduino
     // Pro Mini running at 3.3V, cannot handle this baud rate reliably due to
     // the baud timing being too misaligned with processor ticks. You must use
@@ -73,7 +117,7 @@ void setup() {
     Serial.println(F("Testing device connections..."));
     Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
 
-    delay(500)
+    delay(500);
 
     // load and configure the DMP
     Serial.println(F("Initializing DMP..."));
@@ -119,9 +163,6 @@ void setup() {
         Serial.print(devStatus);
         Serial.println(F(")"));
     }
-
-    // configure LED for output
-    pinMode(LED_PIN, OUTPUT);
 }
 
 
@@ -135,20 +176,38 @@ void loop() {
     if (!dmpReady) return;
     // read a packet from FIFO
     if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) { // Get the Latest packet
-          // display Euler angles in degrees
-          mpu.dmpGetQuaternion(&q, fifoBuffer);
-          mpu.dmpGetGravity(&gravity, &q);
-          mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+        // display Euler angles in degrees
+        mpu.dmpGetQuaternion(&q, fifoBuffer);
+        mpu.dmpGetGravity(&gravity, &q);
+        mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
 
-          // Serial.print("pitch: ");
-          // Serial.print(ypr[1] * 180/M_PI);
-          // Serial.print("\troll: ");
-          // Serial.println(ypr[2] * 180/M_PI);
+        // Serial.print("pitch: ");
+        // Serial.print(ypr[1] * 180/M_PI);
+        // Serial.print("\troll: ");
+        // Serial.println(ypr[2] * 180/M_PI);
 
-          if (ypr[1] > 0.4) Serial.println("Right");
-          else if (ypr[1] < -0.4) Serial.println("Left");
-          else if (ypr[2] > 0.4) Serial.println("Forward");
-          else if (ypr[2] < -0.4) Serial.println("Reverse");
-          else Serial.println("Stop");
+        if (ypr[1] > 0.4) {
+          Serial.println("Right");
+          myData.num = 4;
+        }
+        else if (ypr[1] < -0.4) {
+          Serial.println("Left");
+          myData.num = 3;
+        }
+        else if (ypr[2] > 0.4) {
+          Serial.println("Forward");
+          myData.num = 1;
+        }
+        else if (ypr[2] < -0.4) {
+          Serial.println("Reverse");
+          myData.num = 2;
+        }
+        else {
+          Serial.println("Stop");
+          myData.num = 0;
+        }
+
+        // Send message via ESP-NOW
+        esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
     }
 }
