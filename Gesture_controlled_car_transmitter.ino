@@ -5,7 +5,7 @@
 #include <ezButton.h>
 
 // REPLACE WITH YOUR RECEIVER MAC Address
-uint8_t broadcastAddress[] = { 0xA0, 0xA3, 0xB3, 0x2B, 0x52, 0xF4 };
+uint8_t broadcastAddress[] = { 0x94, 0xB5, 0x55, 0xF4, 0x31, 0x38 };
 
 typedef struct struct_message {
   uint8_t num;
@@ -40,7 +40,7 @@ float ypr[3];         // [yaw, pitch, roll]   yaw/pitch/roll container and gravi
 # define CONNECTION_LED 27
 bool connection;
 
-ezButton button(18);
+ezButton button(33);
 
 
 // ================================================================
