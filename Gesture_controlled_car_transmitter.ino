@@ -1,30 +1,37 @@
+// ************************************************** HEADER FILES ************************************************************
+// mpu header files
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
-#include <esp_now.h>
-#include <WiFi.h>
-#include <ezButton.h>
-
-// REPLACE WITH YOUR RECEIVER MAC Address
-uint8_t broadcastAddress[] = { 0x94, 0xB5, 0x55, 0xF4, 0x31, 0x38 };
-
-typedef struct struct_message {
-  uint8_t num;
-} struct_message;
-
-// Create a struct_message called myData
-struct_message myData;
-
-esp_now_peer_info_t peerInfo;
 
 #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
 #include "Wire.h"
 #endif
 
+// ESP-NOW header files
+#include <esp_now.h>
+#include <WiFi.h>
+
+// toggle button header files
+#include <ezButton.h>
+
+// ********************************************* DEFINITIONS AND VARIABLES ******************************************************
+
+// ========================== ESP-NOW =============================
+uint8_t broadcastAddress[] = { 0x94, 0xB5, 0x55, 0xF4, 0x31, 0x38 };
+
+typedef struct struct_message {
+  uint8_t dir;
+  uint8_t speed;
+} struct_message;
+
+struct_message myData;
+
+esp_now_peer_info_t peerInfo;
+
+// ============================= MPU ===============================
 MPU6050 mpu;
 
-#define INTERRUPT_PIN 2  // use pin 2 on Arduino Uno & most boards
-
-// MPU control/status vars
+// control variables
 bool dmpReady = false;   // set true if DMP init was successful
 uint8_t mpuIntStatus;    // holds actual interrupt status byte from MPU
 uint8_t devStatus;       // return status after each device operation (0 = success, !0 = error)
@@ -37,55 +44,34 @@ Quaternion q;         // [w, x, y, z]         quaternion container
 VectorFloat gravity;  // [x, y, z]            gravity vector
 float ypr[3];         // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
-# define CONNECTION_LED 27
-bool connection;
-
-ezButton button(33);
-
-
-// ================================================================
-// ===               INTERRUPT DETECTION ROUTINE                ===
-// ================================================================
-
+// interruption detection routine
+#define INTERRUPT_PIN 2              // use pin 2 on Arduino Uno & most boards
 volatile bool mpuInterrupt = false;  // indicates whether MPU interrupt pin has gone high
 void dmpDataReady() {
   mpuInterrupt = true;
 }
 
+// ========================== KILL SWITCH ===============================
 
+#define CONNECTION_LED 27
+bool connection;
 
-// ================================================================
-// ===                      INITIAL SETUP                       ===
-// ================================================================
+ezButton button(33);
+
+// ******************************************* SETUP *******************************************************
 
 void setup() {
-// join I2C bus (I2Cdev library doesn't do this automatically)
-#if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
-  Wire.begin();
-  Wire.setClock(400000);  // 400kHz I2C clock. Comment this line if having compilation difficulties
-#elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
-  Fastwire::setup(400, true);
-#endif
 
-  // initialize serial communication
-  // (115200 chosen because it is required for Teapot Demo output, but it's
-  // really up to you depending on your project)
   Serial.begin(115200);
-  while (!Serial)
-    ;  // wait for Leonardo enumeration, others continue immediately
+  while (!Serial); // wait for Leonardo edireration, others continue immediately
 
-  // Set device as a Wi-Fi Station
+  // =========================== ESP-NOW ==============================
   WiFi.mode(WIFI_STA);
 
-  // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
-
-  // Once ESPNow is successfully Init, we will register for Send CB to
-  // get the status of Trasnmitted packet
-  // esp_now_register_send_cb(OnDataSent);
 
   // Register peer
   memcpy(peerInfo.peer_addr, broadcastAddress, 6);
@@ -98,11 +84,15 @@ void setup() {
     return;
   }
 
-  // NOTE: 8MHz or slower host processors, like the Teensy @ 3.3V or Arduino
-  // Pro Mini running at 3.3V, cannot handle this baud rate reliably due to
-  // the baud timing being too misaligned with processor ticks. You must use
-  // 38400 or slower in these cases, or use some kind of external separate
-  // crystal solution for the UART timer.
+  // ========================== MPU ===============================
+
+  // join I2C bus (I2Cdev library doesn't do this automatically)
+  #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
+    Wire.begin();
+    Wire.setClock(400000);  // 400kHz I2C clock. Comment this line if having compilation difficulties
+  #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
+    Fastwire::setup(400, true);
+  #endif
 
   // initialize device
   Serial.println(F("Initializing I2C devices..."));
@@ -160,24 +150,21 @@ void setup() {
     Serial.println(F(")"));
   }
 
+  // =========================== KILL SWITCH ==============================
   connection = true;
   button.setDebounceTime(50);  // set debounce time to 50 milliseconds
   pinMode(27, OUTPUT);
   digitalWrite(27, HIGH);
 }
 
-
-
-// ================================================================
-// ===                    MAIN PROGRAM LOOP                     ===
-// ================================================================
+// ******************************************** LOOP ***************************************************
 
 void loop() {
   // if programming failed, don't try to do anything
   if (!dmpReady) return;
+  
   // read a packet from FIFO
   if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {  // Get the Latest packet
-    // display Euler angles in degrees
     mpu.dmpGetQuaternion(&q, fifoBuffer);
     mpu.dmpGetGravity(&gravity, &q);
     mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
@@ -187,21 +174,37 @@ void loop() {
     // Serial.print("\troll: ");
     // Serial.println(ypr[2] * 180/M_PI);
 
+    // right
     if (ypr[1] > 0.4) {
-      Serial.println("Right");
-      myData.num = 4;
-    } else if (ypr[1] < -0.4) {
-      Serial.println("Left");
-      myData.num = 3;
-    } else if (ypr[2] > 0.4) {
-      Serial.println("Forward");
-      myData.num = 1;
-    } else if (ypr[2] < -0.4) {
-      Serial.println("Reverse");
-      myData.num = 2;
-    } else {
-      Serial.println("Stop");
-      myData.num = 0;
+      myData.dir = 4;
+      if (ypr[1] > 0.65) myData.speed = 6;
+      else myData.speed = ceil((ypr[1] - 0.4) * 20);
+    }
+    
+    // left
+    else if (ypr[1] < -0.4) {
+      myData.dir = 3;
+      if (ypr[1] < -0.65) myData.speed = 6;
+      else myData.speed = ceil((-ypr[1] - 0.4) * 20);
+    }
+    
+    // forward
+    else if (ypr[2] > 0.4) {
+      myData.dir = 1;
+      if (ypr[2] > 0.65) myData.speed = 6;
+      else myData.speed = ceil((ypr[2] - 0.4) * 20);
+    } 
+    
+    // reverse
+    else if (ypr[2] < -0.4) {
+      myData.dir = 2;
+      if (ypr[2] < -0.65) myData.speed = 6;
+      else myData.speed = ceil((-ypr[2] - 0.4) * 20);
+    } 
+    
+    // stop
+    else {
+      myData.dir = 0;
     }
 
     button.loop();  // MUST call the loop() function first
@@ -213,8 +216,12 @@ void loop() {
     }
 
     if (connection == false) {
-      myData.num = 0;
+      myData.dir = 0;
     }
+
+    Serial.print(myData.dir);
+    Serial.print("\t");
+    Serial.println(myData.speed);
 
     esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&myData, sizeof(myData));
   }
